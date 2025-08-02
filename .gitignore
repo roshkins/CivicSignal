@@ -10,3 +10,6 @@ __pycache__/
 
 # generic ignore
 .ignore
+
+# cache
+cache/

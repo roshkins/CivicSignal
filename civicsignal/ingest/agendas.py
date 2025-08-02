@@ -72,10 +72,13 @@ class SanFranciscoAgendaParser:
         # check if the page is an agenda itself, or contains link to an agenda
         agenda_items = []
         for div in soup.find_all("div"):
+            if div.id and "agenda" in div.id.lower():
+                agenda_items.append(div.text)
+
         for link in soup.find_all("a"):
-            if "agenda" in link.text.lower():
+            if link.text and "agenda" in link.text.lower():
                 agenda_items.append(link.text)
-        return None
+        return agenda_items
 
     
     # def get_agenda_iltem_topics(self, date: datetime.date | None = None):
@@ -83,7 +86,8 @@ class SanFranciscoAgendaParser:
 
 def main():
     """Example usage."""
-    test_source = SanFranciscoAgendaSource.BOARD_OF_SUPERVISORS
+    # test_source = SanFranciscoAgendaSource.BOARD_OF_SUPERVISORS
+    test_source = SanFranciscoAgendaSource.ETHICS_COMMISSION
     parser = SanFranciscoAgendaParser(test_source)
     agenda_items = parser.get_agenda_items()
     print(agenda_items)

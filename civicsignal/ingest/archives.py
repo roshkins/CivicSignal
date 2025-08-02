@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import datetime
+import json
 import os
 from enum import Enum
+from pathlib import Path
 
 import feedparser
 import requests
@@ -154,18 +156,45 @@ class SanFranciscoArchiveParser:
         self.deepgram = DeepgramClient(DEEPGRAM_API_KEY)
 
         self.meeting_transcript_cache: dict[datetime.date, PrerecordedResponse] = {}
+        self.meeting_transcript_disk_cache: dict[datetime.date, Path] = {}
+        self.cache_dir = Path("cache")
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        for file in self.cache_dir.glob("transcript_*.json"):
+            date = datetime.date.fromisoformat(file.stem.split("_")[1])
+            self.meeting_transcript_disk_cache[date] = file
+            self._get_transcript_from_disk(date)
+
+    def _transcript_path(self, date: datetime.date) -> Path:
+        return self.cache_dir / f"transcript_{date}_{self.source.name}.json"
+
+    def _get_transcript_from_disk(self, date: datetime.date) -> PrerecordedResponse:
+        transcript_path = self._transcript_path(date)
+        if date in self.meeting_transcript_disk_cache and transcript_path.is_file():
+            with open(transcript_path, "r") as f:
+                return PrerecordedResponse.from_dict(json.load(f))
+        return None
+
+    def _save_transcript_to_disk(self, date: datetime.date, transcript: PrerecordedResponse):
+        if date not in self.meeting_transcript_disk_cache:
+            self.meeting_transcript_disk_cache[date] = self._transcript_path(date)
+        with open(self.meeting_transcript_disk_cache[date], "w") as f:
+            json.dump(transcript.to_dict(), f, indent=4)
 
     def get_audio_url_from_date(self, date: datetime.date) -> str:
         """Get the audio URL for a given clip ID."""
         for entry in self.audio_rss_feed.entries:
             entry_date = get_date_from_feed_entry(entry)
             if entry_date == date:
-                return self.group.get_audio_url_from_rss_entry(entry)
+                return self.source.get_audio_url_from_rss_entry(entry)
         raise Exception(f"No audio URL found for {date}")
     
     def last_meeting_date(self) -> datetime.date:
         """Get the last meeting date for the current feed."""
         return get_date_from_feed_entry(self.audio_rss_feed.entries[0])
+
+    def get_meeting_dates(self) -> list[datetime.date]:
+        """Get all meeting dates for the current feed."""
+        return [get_date_from_feed_entry(entry) for entry in self.audio_rss_feed.entries]
 
     def download_audio(self, date: datetime.date) -> bytes:
         """Download the audio for a given date."""
@@ -173,9 +202,12 @@ class SanFranciscoArchiveParser:
         response = requests.get(audio_url)
         return response.content
 
-    def transcribe_audio(self, date: datetime.date | None = None) -> PrerecordedResponse:
+    def _transcribe_audio(self, date: datetime.date | None = None) -> PrerecordedResponse:
         if date in self.meeting_transcript_cache:
             return self.meeting_transcript_cache[date]
+        
+        if date in self.meeting_transcript_disk_cache:
+            return self._get_transcript_from_disk(date)
         
         try:
             if date is None:
@@ -202,6 +234,7 @@ class SanFranciscoArchiveParser:
             )
 
             self.meeting_transcript_cache[date] = response
+            self._save_transcript_to_disk(date, response)
 
             return response
 
@@ -209,17 +242,17 @@ class SanFranciscoArchiveParser:
             print(f"Unknown Exception: {e}")
             raise e
 
-    def _get_meeting_transcript(self, date: datetime.date | None = None) -> PrerecordedResponse:
+    def get_meeting_transcript(self, date: datetime.date | None = None) -> PrerecordedResponse:
         if date in self.meeting_transcript_cache:
             return self.meeting_transcript_cache[date]
         
         if date is None:
             date = self.last_meeting_date()
-        return self.transcribe_audio(date)
+        return self._transcribe_audio(date)
     
     def get_meeting_topics(self, date: datetime.date | None = None) -> list[str]:
         """Get the topics for a given meeting."""
-        response = self._get_meeting_transcript(date)
+        response = self.get_meeting_transcript(date)
         unique_topics = { topic.topic for segment in response.results.topics.segments for topic in segment.topics }
         return unique_topics
     
@@ -228,8 +261,12 @@ def main():
     test_source = SanFranciscoArchiveSource.PUBLIC_UTILITIES_COMMISSION
     test_date = datetime.date(2025, 7, 22)
     parser = SanFranciscoArchiveParser(test_source)
-    topics = parser.get_meeting_topics(test_date)
-    print(topics)
+    # topics = parser.get_meeting_topics(test_date)
+
+    # print(topics)
+    transcript = parser.get_meeting_transcript(test_date)
+
+    print(transcript)
 
 if __name__ == "__main__":
     main()
