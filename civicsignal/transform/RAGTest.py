@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import html
 import html.parser
 import http

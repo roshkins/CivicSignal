@@ -1,1 +1,12 @@
-.vscode/ 
+# IDE
+.vscode/
+
+# python
+.venv/
+dist/
+*.pyc
+__pycache__/
+*.egg-info/
+
+# generic ignore
+.ignore
