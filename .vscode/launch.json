@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "env": {"CEREBRAS_API_KEY": "csk-t9t4vw3ep2fv3pveytdyhv9hm56dcj4vn48vkct2e4n355nh"}
+            "env": {"CEREBRAS_API_KEY": "csk-x6wkrx53kry2prvpdm6j6tvrvyvyrxjwkvv6cm6ytvcjw5tc"}
         }
     ]
 }
