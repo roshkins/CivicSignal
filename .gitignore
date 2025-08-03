@@ -10,6 +10,7 @@ __pycache__/
 
 # generic ignore
 .ignore
+mise.local.toml
 
 # data
 cache/
