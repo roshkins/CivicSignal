@@ -219,22 +219,22 @@ class SanFranciscoArchiveParser:
         self.transcript_response_cache: dict[datetime.date, PrerecordedResponse] = {}
         self.transcript_response_disk_cache: dict[datetime.date, Path] = {}
         self.meeting_cache: dict[datetime.date, Meeting] = {}
-        self.cache_dir = cache_dir
+        self.cache_dir = cache_dir / self.source.name
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        for file in self.cache_dir.glob(f"transcript_*_{self.source.name}.json"):
+        for file in self.cache_dir.glob(f"transcript_*.json"):
             date = datetime.date.fromisoformat(file.stem.split("_")[1])
             self.transcript_response_disk_cache[date] = file
             self._get_transcript_from_disk(date)
 
     @classmethod
     def all_cached_sources(cls) -> list[SanFranciscoArchiveSource]:
-        return [source for source in SanFranciscoArchiveSource if len(list(cls.DEFAULT_CACHE_DIR.glob(f"transcript_*_{source.name}.json"))) > 0]
+        return [source for source in SanFranciscoArchiveSource if len(list((cls.DEFAULT_CACHE_DIR / source.name).glob(f"transcript_*.json"))) > 0]
 
     def all_cached_meetings(self) -> list[Meeting]:
         return [self.get_meeting_transcript(date) for date in self.transcript_response_disk_cache.keys()]
 
     def _transcript_path(self, date: datetime.date) -> Path:
-        return self.cache_dir / f"transcript_{date}_{self.source.name}.json"
+        return self.cache_dir / f"transcript_{date}.json"
 
     def _get_transcript_from_disk(self, date: datetime.date) -> PrerecordedResponse:
         transcript_path = self._transcript_path(date)

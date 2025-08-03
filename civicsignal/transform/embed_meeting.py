@@ -24,7 +24,11 @@ class MeetingRAGDb:
         documents = []
         metadatas = []
         for paragraph in paragraphs:
-            ids.append(f"{meeting.date}_{meeting.group}_{paragraph.start_time}_{paragraph.end_time}")
+            id = f"{meeting.date}_{meeting.group}_{paragraph.start_time}_{paragraph.end_time}"
+            # if self.collection.get(ids=[id]) is not None:
+            #     # skip if already embedded
+            #     continue
+            ids.append(id)
             documents.append(paragraph.text)
             metadata = {
                 "start_time": paragraph.start_time,
