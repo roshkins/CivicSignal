@@ -308,6 +308,5 @@ def chat(api_key: Optional[str], query: Optional[str]):
         click.echo(f"Unexpected error: {e}", err=True)
         raise click.Abort()
 
-
 if __name__ == '__main__':
     cli()
