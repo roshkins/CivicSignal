@@ -13,22 +13,52 @@ pip install civicsignal
 
 ### From source
 ```bash
-git clone https://github.com/your-username/civicsignal.git
+git clone https://github.com/roshkins/CivicSignal.git
 cd civicsignal
 pip install -e .
 ```
 
 ## Quick Start
 
+### Using the CLI
+
+The CivicSignal CLI provides easy access to San Francisco government meeting data:
+
+```bash
+# List available government groups
+civicsignal list-groups
+
+# List recent meeting dates for a specific group
+civicsignal list-meetings --group BOARD_OF_SUPERVISORS
+
+# Embed a specific meeting into the searchable database
+civicsignal embed --group BOARD_OF_SUPERVISORS --date 2024-01-15
+
+# Search for topics across embedded meetings
+civicsignal search --topic "housing development"
+
+# Get help for any command
+civicsignal --help
+civicsignal embed --help
+```
+
+### Using the Python API
+
 ```python
-from civicsignal import SanFranciscoArchiveBrowser, SF_ARCHIVE_GROUP
+from civicsignal import SanFranciscoArchiveParser, SanFranciscoArchiveSource
 
-# Browse San Francisco archives
-browser = SanFranciscoArchiveBrowser()
-archives = browser.get_archives()
+# Parser San Francisco archives
+source = SanFranciscoArchiveSource.BOARD_OF_SUPERVISORS
+parser = SanFranciscoArchiveParser(source)
 
-# Access specific archive groups
-sf_archives = SF_ARCHIVE_GROUP
+# Get all meeting dates
+dates = parser.get_meeting_dates()
+
+# Get meeting transcript for a specific date
+transcript = parser.get_meeting_transcript(dates[0])
+
+# Get meeting topics
+topics = parser.get_meeting_topics(dates[0])
 ```
 
 ## Features
@@ -37,6 +67,65 @@ sf_archives = SF_ARCHIVE_GROUP
 - **Data Ingestion**: Tools for ingesting civic data from various sources
 - **Transformation**: Utilities for processing and transforming civic data
 - **RAG Integration**: Ready-to-use RAG (Retrieval-Augmented Generation) components
+- **Output**: Tools for outputting data in various formats
+- **CLI Interface**: Command-line tools for easy data access and analysis
+
+## CLI Commands
+
+The CivicSignal CLI provides several commands for working with San Francisco government meeting data:
+
+### `civicsignal list-groups`
+List all available San Francisco government groups and commissions.
+
+```bash
+# List all groups
+civicsignal list-groups
+
+# Get details about a specific group
+civicsignal list-groups --group BOARD_OF_SUPERVISORS
+```
+
+### `civicsignal list-meetings`
+List recent meeting dates for a specific government group.
+
+```bash
+# List recent meetings for Board of Supervisors
+civicsignal list-meetings --group BOARD_OF_SUPERVISORS
+
+# Show more recent meetings
+civicsignal list-meetings --group PLANNING_COMMISSION --limit 20
+```
+
+### `civicsignal embed`
+Embed a specific meeting into the searchable RAG database. This command downloads, transcribes, and embeds the meeting for later searching.
+
+```bash
+# Embed a specific meeting
+civicsignal embed --group BOARD_OF_SUPERVISORS --date 2024-01-15
+
+# Use custom database path
+civicsignal embed --group PLANNING_COMMISSION --date 2024-02-20 --db-path ./my_meetings_db
+
+# Force re-embedding (overwrite existing)
+civicsignal embed --group BOARD_OF_SUPERVISORS --date 2024-01-15 --force
+```
+
+### `civicsignal search`
+Search for topics across all embedded meetings in the database.
+
+```bash
+# Search for housing-related discussions
+civicsignal search --topic "housing development"
+
+# Get more results
+civicsignal search --topic "budget allocation" --num-results 20
+
+# Output in JSON format
+civicsignal search --topic "transportation" --output-format json
+
+# Use custom database
+civicsignal search --topic "environment" --db-path ./my_meetings_db
+```
 
 ## Development
 
@@ -44,21 +133,11 @@ sf_archives = SF_ARCHIVE_GROUP
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/civicsignal.git
+git clone https://github.com/roshkins/CivicSignal.git
 cd civicsignal
 
 # Install in development mode with dev dependencies
 pip install -e ".[dev]"
-```
-
-### Running Tests
-
-```bash
-# Run tests (when implemented)
-pytest
-
-# Run with coverage
-pytest --cov=civicsignal
 ```
 
 ## Project Structure
@@ -66,12 +145,13 @@ pytest --cov=civicsignal
 ```
 civicsignal/
 ├── civicsignal/
-│   ├── __init__.py          # Main package exports
 │   ├── ingest/              # Data ingestion modules
-│   │   ├── archives.py      # Archive browsing functionality
-│   │   └── deepgram_test.py # Deepgram integration tests
-│   └── Transform/           # Data transformation modules
-│       └── RAGTest.py       # RAG testing utilities
+│   │   ├── archives.py      # Archive parsing functionality
+│   │   └── agendas.py       # Agenda parsing functionality
+│   └── transform/           # Data transformation modules
+│       └── RAGTest.py       # testing RAG utilities
+│   └── output/              # Output modules
+│       └── similar_topics.py # Similar topics search
 ├── pyproject.toml           # Project configuration
 ├── README.md               # This file
 └── uv.lock                 # Dependency lock file
@@ -93,7 +173,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 If you encounter any issues or have questions, please:
 
-1. Check the [Issues](https://github.com/your-username/civicsignal/issues) page
+1. Check the [Issues](https://github.com/roshkins/CivicSignal/issues) page
 2. Create a new issue if your problem isn't already reported
 3. Contact the maintainers
 

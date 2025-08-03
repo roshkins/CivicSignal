@@ -2,6 +2,7 @@
 import datetime
 import json
 import os
+import logging
 from enum import Enum
 from pathlib import Path
 
@@ -10,7 +11,7 @@ import requests
 from feedparser.util import FeedParserDict
 from deepgram import DeepgramClient, PrerecordedOptions, PrerecordedResponse
 
-from civicsignal.ingest.utils import get_date_from_feed_entry
+from civicsignal.utils import get_date_from_feed_entry, Meeting, Paragraph
 
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 
@@ -155,13 +156,14 @@ class SanFranciscoArchiveParser:
             raise Exception("DEEPGRAM_API_KEY is not set")
         self.deepgram = DeepgramClient(DEEPGRAM_API_KEY)
 
-        self.meeting_transcript_cache: dict[datetime.date, PrerecordedResponse] = {}
-        self.meeting_transcript_disk_cache: dict[datetime.date, Path] = {}
+        self.transcript_response_cache: dict[datetime.date, PrerecordedResponse] = {}
+        self.transcript_response_disk_cache: dict[datetime.date, Path] = {}
+        self.meeting_cache: dict[datetime.date, Meeting] = {}
         self.cache_dir = Path("cache")
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        for file in self.cache_dir.glob("transcript_*.json"):
+        for file in self.cache_dir.glob(f"transcript_*_{self.source.name}.json"):
             date = datetime.date.fromisoformat(file.stem.split("_")[1])
-            self.meeting_transcript_disk_cache[date] = file
+            self.transcript_response_disk_cache[date] = file
             self._get_transcript_from_disk(date)
 
     def _transcript_path(self, date: datetime.date) -> Path:
@@ -169,15 +171,15 @@ class SanFranciscoArchiveParser:
 
     def _get_transcript_from_disk(self, date: datetime.date) -> PrerecordedResponse:
         transcript_path = self._transcript_path(date)
-        if date in self.meeting_transcript_disk_cache and transcript_path.is_file():
+        if date in self.transcript_response_disk_cache and transcript_path.is_file():
             with open(transcript_path, "r") as f:
                 return PrerecordedResponse.from_dict(json.load(f))
-        return None
+        raise Exception(f"No transcript found for source {self.source.name} and date {date}")
 
     def _save_transcript_to_disk(self, date: datetime.date, transcript: PrerecordedResponse):
-        if date not in self.meeting_transcript_disk_cache:
-            self.meeting_transcript_disk_cache[date] = self._transcript_path(date)
-        with open(self.meeting_transcript_disk_cache[date], "w") as f:
+        if date not in self.transcript_response_disk_cache:
+            self.transcript_response_disk_cache[date] = self._transcript_path(date)
+        with open(self.transcript_response_disk_cache[date], "w") as f:
             json.dump(transcript.to_dict(), f, indent=4)
 
     def get_audio_url_from_date(self, date: datetime.date) -> str:
@@ -203,10 +205,10 @@ class SanFranciscoArchiveParser:
         return response.content
 
     def _transcribe_audio(self, date: datetime.date | None = None) -> PrerecordedResponse:
-        if date in self.meeting_transcript_cache:
-            return self.meeting_transcript_cache[date]
+        if date in self.transcript_response_cache:
+            return self.transcript_response_cache[date]
         
-        if date in self.meeting_transcript_disk_cache:
+        if date in self.transcript_response_disk_cache:
             return self._get_transcript_from_disk(date)
         
         try:
@@ -233,28 +235,57 @@ class SanFranciscoArchiveParser:
                 options=options,
             )
 
-            self.meeting_transcript_cache[date] = response
+            self.transcript_response_cache[date] = response
             self._save_transcript_to_disk(date, response)
 
             return response
 
         except Exception as e:
-            print(f"Unknown Exception: {e}")
+            logging.error(f"Exception while transcribing audio: {e}")
             raise e
 
-    def get_meeting_transcript(self, date: datetime.date | None = None) -> PrerecordedResponse:
-        if date in self.meeting_transcript_cache:
-            return self.meeting_transcript_cache[date]
-        
+    def _get_raw_transcribed_meeting(self, date: datetime.date | None = None) -> PrerecordedResponse:
         if date is None:
             date = self.last_meeting_date()
+
+        if date in self.transcript_response_cache:
+            logging.debug(f"Using cached transcript for {date}")
+            return self.transcript_response_cache[date]
+        
+        if date in self.transcript_response_disk_cache:
+            logging.debug(f"Using cached transcript from disk for {date}")
+            return self._get_transcript_from_disk(date)        
+        
+        logging.debug(f"Transcribing audio for {date}")
         return self._transcribe_audio(date)
+        
+
+    def get_meeting_transcript(self, date: datetime.date | None = None) -> Meeting:
+        if date in self.meeting_cache:
+            return self.meeting_cache[date]
+        
+        response = self._get_raw_transcribed_meeting(date)
+        paragraphs = response.results.channels[0].alternatives[0].paragraphs.paragraphs
+        paragraphs = [
+            Paragraph(
+                start_time=paragraph.start,
+                end_time=paragraph.end,
+                speaker_id=paragraph.speaker,
+                sentences=[sentence.text for sentence in paragraph.sentences]
+            ) for paragraph in paragraphs]
+        unique_topics = { topic.topic for segment in response.results.topics.segments for topic in segment.topics }
+        meeting = Meeting(
+            date=date,
+            group=self.source.name,
+            transcript=paragraphs,
+            topics=list(unique_topics)
+        )
+        self.meeting_cache[date] = meeting
+        return meeting
     
     def get_meeting_topics(self, date: datetime.date | None = None) -> list[str]:
         """Get the topics for a given meeting."""
-        response = self.get_meeting_transcript(date)
-        unique_topics = { topic.topic for segment in response.results.topics.segments for topic in segment.topics }
-        return unique_topics
+        return self.get_meeting_transcript(date).topics
     
 
 def main():

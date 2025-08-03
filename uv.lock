@@ -281,6 +281,23 @@ wheels = [
 ]
 
 [[package]]
+name = "cerebras-cloud-sdk"
+version = "1.35.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "distro" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4e/c9/b140f033fac39a6f94d8e3ee90aa5eb1282a203bcb75ec4774446e65229d/cerebras_cloud_sdk-1.35.0.tar.gz", hash = "sha256:1b65185b4688516f41716aa5ec19c5c9645e24b259a841cfff17542615e376a4", size = 112833, upload-time = "2025-05-23T22:33:10.165Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/da/c6/36d7a1461463c6c1034b20385eef7cb5a334302e7ceea054d41418e33eb6/cerebras_cloud_sdk-1.35.0-py3-none-any.whl", hash = "sha256:4103972e4a36ca5be92190958ffc3b6a14fefca6d60d743a72d3e3a119642160", size = 89455, upload-time = "2025-05-23T22:33:08.719Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2025.7.14"
 source = { registry = "https://pypi.org/simple" }
@@ -399,7 +416,9 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
+    { name = "cerebras-cloud-sdk" },
     { name = "chromadb" },
+    { name = "click" },
     { name = "deepgram-sdk" },
     { name = "feedparser" },
     { name = "openai" },
@@ -416,7 +435,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.13.4" },
+    { name = "cerebras-cloud-sdk", specifier = ">=1.35.0" },
     { name = "chromadb", specifier = ">=1.0.15" },
+    { name = "click", specifier = ">=8.2.1" },
     { name = "deepgram-sdk", specifier = ">=4.8.1" },
     { name = "feedparser", specifier = ">=6.0.11" },
     { name = "openai", specifier = ">=1.98.0" },

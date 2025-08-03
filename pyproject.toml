@@ -32,12 +32,17 @@ dependencies = [
     "sentence-transformers>=5.0.0",
     "transformers>=4.54.1",
     "requests>=2.32.4",
+    "cerebras-cloud-sdk>=1.35.0",
+    "click>=8.2.1",
 ]
 
 [project.urls]
 Homepage = "https://github.com/roshkins/CivicSignal"
 Repository = "https://github.com/roshkins/CivicSignal"
 Issues = "https://github.com/roshkins/CivicSignal/issues"
+
+[project.scripts]
+civicsignal = "civicsignal.cli:cli"
 
 [dependency-groups]
 dev = [

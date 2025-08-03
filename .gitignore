@@ -11,5 +11,6 @@ __pycache__/
 # generic ignore
 .ignore
 
-# cache
+# data
 cache/
+sf_meetings_rag_db/

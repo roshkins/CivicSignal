@@ -9,7 +9,7 @@ import feedparser
 import requests
 from bs4 import BeautifulSoup
 
-from civicsignal.ingest.utils import get_date_from_feed_entry
+from civicsignal.utils import get_date_from_feed_entry
 
 class SanFranciscoAgendaSource(Enum):
     """Agenda feeds for San Francisco's various commissions."""
