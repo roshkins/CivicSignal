@@ -25,7 +25,14 @@ class MeetingRAGDb:
         for paragraph in paragraphs:
             ids.append(f"{meeting.date}_{meeting.group}_{paragraph.start_time}_{paragraph.end_time}")
             documents.append(paragraph.text)
-            metadatas.append({"start_time": paragraph.start_time, "end_time": paragraph.end_time, "speaker_id": paragraph.speaker_id})
+            metadata = {
+                "start_time": paragraph.start_time,
+                "end_time": paragraph.end_time,
+                "speaker_id": paragraph.speaker_id,
+                "meeting_date": meeting.date.isoformat(),
+                "meeting_group": meeting.group,
+            }
+            metadatas.append(metadata)
 
         self.collection.upsert(
             ids=ids,

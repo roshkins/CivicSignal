@@ -89,8 +89,8 @@ def main():
     # test_source = SanFranciscoAgendaSource.BOARD_OF_SUPERVISORS
     test_source = SanFranciscoAgendaSource.ETHICS_COMMISSION
     parser = SanFranciscoAgendaParser(test_source)
-    agenda_items = parser.get_agenda_items()
-    print(agenda_items)
+    # agenda_items = parser.get_agenda_items()
+    # print(agenda_items)
 
 
 if __name__ == "__main__":

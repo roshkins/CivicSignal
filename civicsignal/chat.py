@@ -7,18 +7,21 @@ Provides an interactive chat experience with similar topics search functionality
 import os
 import sys
 from functools import partial
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable, Literal
 from pathlib import Path
+from dataclasses import dataclass
 
-try:
-    from cerebras.cloud.sdk import Client as CerebrasCloudClient
-except ImportError:
-    print("Error: cerebras-cloud-sdk not found. Please install it with: pip install cerebras-cloud-sdk")
-    sys.exit(1)
+import marimo as mo
+from cerebras.cloud.sdk import Client as CerebrasCloudClient
+from cerebras.cloud.sdk.types.chat.chat_completion import ChatCompletionResponseChoiceMessage as CerebrasChatMessage
 
 from civicsignal.output.similar_topics import search_for_similar_topics
 from civicsignal.utils import Meeting
 
+class ChatMessage(CerebrasChatMessage, mo.ai.ChatMessage):
+    """Chat message class that combines Cerebras and Marimo chat message classes.
+    They largely already overlap, so we just inherit from both."""
+    pass
 
 class CivicSignalChat:
     """Interactive chat interface for CivicSignal using Cerebras SDK."""
@@ -39,7 +42,8 @@ class CivicSignalChat:
         
         self.client = CerebrasCloudClient(api_key=self.api_key)
         self.create_completion = partial(self.client.chat.completions.create, model="qwen-3-32b")
-        self.conversation_history: List[Dict[str, str]] = []
+        self.conversation_history: List[ChatMessage] = []
+
         
     def _format_similar_topics(self, results: Dict[str, Any]) -> str:
         """Format similar topics results for display."""
@@ -104,7 +108,7 @@ Format your responses clearly and use markdown when appropriate."""
         ]
         return tools
     
-    def _get_cerebras_response(self, messages: List[Dict[str, str]]) -> Any:
+    def _get_cerebras_response(self, messages: List[ChatMessage]) -> Any:
         """Get response from Cerebras model."""
         try:
             # Use Cerebras Cloud API to generate response
@@ -120,9 +124,9 @@ Format your responses clearly and use markdown when appropriate."""
             return response.choices[0].message
             
         except Exception as e:
-            return f"Error generating response: {str(e)}"
+            return ChatMessage(role="system", content=f"Error generating response: {str(e)}")
 
-    def _handle_tool_call(self, tool_call: Dict[str, Any], messages: List[Dict[str, str]]) -> str:
+    def _handle_tool_call(self, tool_call: Dict[str, Any], messages: List[ChatMessage]) -> str:
         """Handle a tool call."""
         tool_call = response.tool_calls[0]
         tool_name = tool_call.function.name
@@ -131,16 +135,16 @@ Format your responses clearly and use markdown when appropriate."""
         if tool_name == "search_for_similar_topics":
             similar_topics = search_for_similar_topics(tool_args["query"], tool_args.get("n_results", 10))
             similar_topics_formatted = self._format_similar_topics(similar_topics)
-            tool_message = {
-                "role": "tool",
-                "content": similar_topics_formatted,
-                "tool_call_id": tool_call.id
-            }
+            tool_message = ChatMessage(
+                role="tool",
+                content=similar_topics_formatted,
+                tool_call_id=tool_call.id
+            )
             new_messages.append(tool_message)
             # get final response from model
             response = self.create_completion(messages=messages + new_messages)
             if response:
-                new_messages.append({"role": "assistant", "content": response.choices[0].message.content})
+                new_messages.append(ChatMessage(role="assistant", content=response.choices[0].message.content))
 
         self.conversation_history.extend(new_messages)
         return messages + new_messages
@@ -159,24 +163,40 @@ Format your responses clearly and use markdown when appropriate."""
         
         # Build conversation messages
         messages = [
-            {"role": "system", "content": self._build_system_prompt()},
+            ChatMessage(
+                role="system",
+                content=self._build_system_prompt()
+            ),
         ]
         
         # Add conversation history for context
         for msg in self.conversation_history[-4:]:  # Keep last 4 messages for context
             messages.append(msg)
 
-        messages.append({"role": "user", "content": user_input})
+        messages.append(ChatMessage(role="user", content=user_input))
 
         # Get response from Cerebras
         response = self._get_cerebras_response(messages)
-        self.conversation_history.append({"role": "user", "content": user_input})
-        self.conversation_history.append({"role": "assistant", "content": response.content})
+        self.conversation_history.append(ChatMessage(role="user", content=user_input))
+        self.conversation_history.append(ChatMessage(role="assistant", content=response.content))
 
         if response.tool_calls:
             messages = self._handle_tool_call(response.tool_calls[0], messages)
         
         return response
+
+    # def _messages_for_marimo(self) -> List[ChatMessage]:
+    #     """Convert conversation history to Marimo messages."""
+    #     return [
+    #         ChatMessage(
+    #             role=msg.role if msg.role != "tool" else "system", # marimo doesn't support tool messages
+    #             content=msg.content,
+    #         ) for msg in self.conversation_history]
+        
+    def marimo_chat(self, messages: List[ChatMessage], config: Dict[str, Any]):
+        """Chat interface for use with Marimo."""
+        self.chat(messages[-1].content)
+        return self.conversation_history[-1].content
     
     def interactive_chat(self):
         """Start an interactive chat session."""
@@ -186,7 +206,7 @@ Format your responses clearly and use markdown when appropriate."""
         
         while True:
             try:
-                user_input = input("👤 You: ").strip()
+                user_input = input("👤 Citizen: ").strip()
                 
                 if user_input.lower() in ['quit', 'exit', 'bye', 'q']:
                     print("🤖 Thanks for using CivicSignal Chat! Goodbye!")
@@ -197,7 +217,7 @@ Format your responses clearly and use markdown when appropriate."""
                 
                 print("🤖 Thinking...")
                 response = self.chat(user_input)
-                print(f"🤖 CivicSignal: {response}\n")
+                print(f"🤖 CivicSignal: {response.content}\n")
                 
             except KeyboardInterrupt:
                 print("\n🤖 Chat session interrupted. Goodbye!")
@@ -205,6 +225,12 @@ Format your responses clearly and use markdown when appropriate."""
             except Exception as e:
                 print(f"🤖 Error: {str(e)}\n")
 
+def marimo_chat() -> Callable[[List[ChatMessage], Dict[str, Any]], str]:
+    """Chat interface for Marimo."""
+    chat = CivicSignalChat()
+    def chat_fn(messages: List[ChatMessage], config: Dict[str, Any] = {}) -> str:
+        return chat.marimo_chat(messages, config)
+    return chat_fn
 
 def main():
     """Main entry point for the chat interface."""

@@ -5,6 +5,7 @@ import os
 import logging
 from enum import Enum
 from pathlib import Path
+import random
 
 import feedparser
 import requests
@@ -194,7 +195,7 @@ class SanFranciscoArchiveParser:
         """Get the last meeting date for the current feed."""
         return get_date_from_feed_entry(self.audio_rss_feed.entries[0])
 
-    def get_meeting_dates(self) -> list[datetime.date]:
+    def all_meeting_dates(self) -> list[datetime.date]:
         """Get all meeting dates for the current feed."""
         return [get_date_from_feed_entry(entry) for entry in self.audio_rss_feed.entries]
 
@@ -202,7 +203,9 @@ class SanFranciscoArchiveParser:
         """Download the audio for a given date."""
         audio_url = self.get_audio_url_from_date(date)
         response = requests.get(audio_url)
-        return response.content
+        if response.status_code != 200:
+            raise Exception(f"Failed to download audio for {date}")
+        return response
 
     def _transcribe_audio(self, date: datetime.date | None = None) -> PrerecordedResponse:
         if date in self.transcript_response_cache:
@@ -226,9 +229,9 @@ class SanFranciscoArchiveParser:
                 # utterances=True, # add this if we need smaller chunks
             )
 
-            audio_bytes = self.download_audio(date)
-            source = {"buffer": audio_bytes}
-            # or we can do source = {"stream": requests.get(audio_url).iter_content(chunk_size=8192)}
+            audio_data = self.download_audio(date)
+            # source = {"buffer": audio_data.content}
+            source = {"stream": audio_data.iter_content(chunk_size=8192)}
 
             response = self.deepgram.listen.rest.v("1").transcribe_file(
                 source=source,
@@ -292,9 +295,6 @@ def main():
     test_source = SanFranciscoArchiveSource.PUBLIC_UTILITIES_COMMISSION
     test_date = datetime.date(2025, 7, 22)
     parser = SanFranciscoArchiveParser(test_source)
-    # topics = parser.get_meeting_topics(test_date)
-
-    # print(topics)
     transcript = parser.get_meeting_transcript(test_date)
 
     print(transcript)
