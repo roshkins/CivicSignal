@@ -1,3 +1,8 @@
+#!/usr/bin/env -S marimo run
+# /// script
+# [tool.marimo.display]
+# theme = "dark"
+# ///
 import marimo
 
 __generated_with = "0.14.16"

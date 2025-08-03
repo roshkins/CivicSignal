@@ -4,12 +4,15 @@ Chat interface for CivicSignal using Cerebras SDK.
 Provides an interactive chat experience with similar topics search functionality.
 """
 
+import json
+import datetime
 import os
 import sys
 from functools import partial
 from typing import List, Dict, Any, Optional, Callable, Literal
 from pathlib import Path
 from dataclasses import dataclass
+
 
 import marimo as mo
 from cerebras.cloud.sdk import Client as CerebrasCloudClient
@@ -68,7 +71,10 @@ class CivicSignalChat:
     
     def _build_system_prompt(self) -> str:
         """Build the system prompt for the chat interface."""
-        return """You are CivicSignal, an AI assistant that helps users understand civic meetings and government proceedings in San Francisco. 
+        today = datetime.date.today().isoformat()
+        return f"""You are CivicSignal, an AI assistant that helps users understand civic meetings and government proceedings in San Francisco. 
+
+Today's date is {today}.
 
 Your capabilities:
 1. Answer questions about civic meetings, government processes, and local issues
@@ -126,11 +132,10 @@ Format your responses clearly and use markdown when appropriate."""
         except Exception as e:
             return ChatMessage(role="system", content=f"Error generating response: {str(e)}")
 
-    def _handle_tool_call(self, tool_call: Dict[str, Any], messages: List[ChatMessage]) -> str:
+    def _handle_tool_call(self, tool_call: Any, messages: List[ChatMessage]) -> str:
         """Handle a tool call."""
-        tool_call = response.tool_calls[0]
         tool_name = tool_call.function.name
-        tool_args = tool_call.function.arguments
+        tool_args = json.loads(tool_call.function.arguments)
         new_messages = []
         if tool_name == "search_for_similar_topics":
             similar_topics = search_for_similar_topics(tool_args["query"], tool_args.get("n_results", 10))
@@ -181,7 +186,8 @@ Format your responses clearly and use markdown when appropriate."""
         self.conversation_history.append(ChatMessage(role="assistant", content=response.content))
 
         if response.tool_calls:
-            messages = self._handle_tool_call(response.tool_calls[0], messages)
+            for tool_call in response.tool_calls:
+                self._handle_tool_call(tool_call, messages)
         
         return response
 
