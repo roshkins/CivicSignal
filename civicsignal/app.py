@@ -120,18 +120,25 @@ def embed_compute(date_dropdown, datetime, embed_button, mo, parser, ragdb):
 def civicsignal_chat(CivicSignalChat, mo):
     # TODO: Add a input field for API key
     model = CivicSignalChat()
-    mo.ui.chat(
+    chat = mo.ui.chat(
         model,
         prompts=[
             "Tell me about planning meetings",
             "What's going on with the valencia bike lane?",
         ]
     )
-    return (model,)
+    scrollable_chat = mo.Html(f"""
+    <div style="height: 60vh; overflow-y: auto; border: 1px solid #ccc; border-radius: 5px; padding: 10px;">
+        {chat}
+    </div>
+    """)
+    mo.output.replace(scrollable_chat)
+    return chat, model
 
 
 @app.cell
-def _(mo, model):
+def _(chat, mo, model):
+    _ = chat.value
     video_height = 720
     video_width = video_height / 1.5
     video_source = model.reference_video_url

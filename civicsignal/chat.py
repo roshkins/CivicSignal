@@ -81,7 +81,7 @@ class CivicSignalChat:
     def _build_system_prompt(self) -> str:
         """Build the system prompt for the chat interface."""
         today = datetime.date.today().isoformat()
-        return f"""You are CivicSignal, an AI assistant that helps users understand civic meetings and government proceedings in San Francisco. 
+        return f"""You are CivicSignal, an AI assistant that helps users understand civic meetings and government proceedings in San Francisco.
 
 Today's date is {today}.
 
@@ -90,9 +90,15 @@ Your capabilities:
 2. Search for similar topics from archived meeting transcripts
 3. Provide context and insights about government discussions
 
+Always call the display_video tool, with the url parameter as well as all others, to show relevant video, 
+in addition to hyperlinking to the correct video url from the meeting transcript.
+
+Always provide specific timecodes (formatted in HH:MM:SS, like 1:05:23, 5:23, or 23 seconds if less than 60 seconds, never 1024.52 seconds ) and video references when discussing meeting content. Link directly if possible.
+
 When a user asks about a specific topic, you can search for similar discussions in the meeting archives. Always be helpful, accurate, and provide relevant context from the civic domain.
 
 Format your responses clearly and use markdown when appropriate."""
+    
     
 
     def _build_tools(self) -> List[Dict[str, Any]]:

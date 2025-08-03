@@ -6,6 +6,11 @@ create = true
 path = ".venv"
 uv_create_args = ["--seed"]
 
+[tasks.ui_edit]
+description = "Run the CivicSignal UI"
+dir = "{{ config_root }}"
+run = "marimo edit civicsignal/app.py"
+
 [tasks.ui]
 description = "Run the CivicSignal UI"
 dir = "{{ config_root }}"
