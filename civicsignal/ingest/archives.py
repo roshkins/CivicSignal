@@ -133,6 +133,11 @@ class SanFranciscoArchiveSource(Enum):
     def get_audio_url_from_rss_entry(cls, entry: FeedParserDict):
         """Get the audio URL for a given RSS entry."""
         return [link for link in entry.links if "audio/" in link["type"] ][0]["href"]
+    
+    @classmethod
+    def get_video_url_from_rss_entry(cls, entry: FeedParserDict):
+        """Get the video URL for a given RSS entry."""
+        return [link for link in entry.links if "video/" in link["type"] ][0]["href"]
 
     @classmethod
     def from_string(cls, name):
@@ -144,7 +149,8 @@ class SanFranciscoArchiveSource(Enum):
             return None
 
 class SanFranciscoArchiveParser:
-    def __init__(self, source: SanFranciscoArchiveSource = SanFranciscoArchiveSource.BOARD_OF_SUPERVISORS):
+    DEFAULT_CACHE_DIR = Path("cache")
+    def __init__(self, source: SanFranciscoArchiveSource = SanFranciscoArchiveSource.BOARD_OF_SUPERVISORS, cache_dir: Path = Path("cache")):
         self.source = source
         self.audio_rss_feed = feedparser.parse(source.audio_rss_url)
         if not self.audio_rss_feed.status == 200:
@@ -152,6 +158,9 @@ class SanFranciscoArchiveParser:
         self.agenda_rss_feed = feedparser.parse(source.agenda_rss_url)
         if not self.agenda_rss_feed.status == 200:
             raise Exception(f"Failed to fetch agenda RSS feed for {source.name}")
+        self.video_rss_feed = feedparser.parse(source.video_rss_url)
+        if not self.video_rss_feed.status == 200:
+            raise Exception(f"Failed to fetch video RSS feed for {source.name}")
         
         if DEEPGRAM_API_KEY is None:
             raise Exception("DEEPGRAM_API_KEY is not set")
@@ -160,12 +169,19 @@ class SanFranciscoArchiveParser:
         self.transcript_response_cache: dict[datetime.date, PrerecordedResponse] = {}
         self.transcript_response_disk_cache: dict[datetime.date, Path] = {}
         self.meeting_cache: dict[datetime.date, Meeting] = {}
-        self.cache_dir = Path("cache")
+        self.cache_dir = cache_dir
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         for file in self.cache_dir.glob(f"transcript_*_{self.source.name}.json"):
             date = datetime.date.fromisoformat(file.stem.split("_")[1])
             self.transcript_response_disk_cache[date] = file
             self._get_transcript_from_disk(date)
+
+    @classmethod
+    def all_cached_sources(cls) -> list[SanFranciscoArchiveSource]:
+        return [source for source in SanFranciscoArchiveSource if len(list(cls.DEFAULT_CACHE_DIR.glob(f"transcript_*_{source.name}.json"))) > 0]
+
+    def all_cached_meetings(self) -> list[Meeting]:
+        return [self.get_meeting_transcript(date) for date in self.transcript_response_disk_cache.keys()]
 
     def _transcript_path(self, date: datetime.date) -> Path:
         return self.cache_dir / f"transcript_{date}_{self.source.name}.json"
@@ -174,7 +190,9 @@ class SanFranciscoArchiveParser:
         transcript_path = self._transcript_path(date)
         if date in self.transcript_response_disk_cache and transcript_path.is_file():
             with open(transcript_path, "r") as f:
-                return PrerecordedResponse.from_dict(json.load(f))
+                transcript = PrerecordedResponse.from_dict(json.load(f))
+                self.transcript_response_cache[date] = transcript
+                return transcript
         raise Exception(f"No transcript found for source {self.source.name} and date {date}")
 
     def _save_transcript_to_disk(self, date: datetime.date, transcript: PrerecordedResponse):
@@ -183,13 +201,34 @@ class SanFranciscoArchiveParser:
         with open(self.transcript_response_disk_cache[date], "w") as f:
             json.dump(transcript.to_dict(), f, indent=4)
 
+
+    def _get_rss_entry_from_date(self, date: datetime.date, rss_feed: feedparser.FeedParserDict, date_tolerance: datetime.timedelta = datetime.timedelta(days=1)) -> FeedParserDict:
+        """Get the RSS entry for a given date.
+        
+        Args:
+            date: The date to get the RSS entry for.
+            rss_feed: The RSS feed to search in.
+            date_tolerance: The tolerance for the date of the RSS entry.
+                This is used to account for the fact that the date of the RSS entry
+                may be slightly different from the date of the meeting.
+                For example, the date of the RSS entry may be the day after the meeting.
+                This is useful because the RSS feed is updated after the meeting.
+        """
+        for entry in rss_feed.entries:
+            entry_date = get_date_from_feed_entry(entry)
+            if entry_date == date or (entry_date - date) <= date_tolerance:
+                return entry
+        raise Exception(f"No RSS entry found for {self.source.name} on {date}")
+
     def get_audio_url_from_date(self, date: datetime.date) -> str:
         """Get the audio URL for a given clip ID."""
-        for entry in self.audio_rss_feed.entries:
-            entry_date = get_date_from_feed_entry(entry)
-            if entry_date == date:
-                return self.source.get_audio_url_from_rss_entry(entry)
-        raise Exception(f"No audio URL found for {date}")
+        entry = self._get_rss_entry_from_date(date, self.audio_rss_feed)
+        return self.source.get_audio_url_from_rss_entry(entry)
+    
+    def get_video_url_from_date(self, date: datetime.date) -> str:
+        """Get the video URL for a given clip ID."""
+        entry = self._get_rss_entry_from_date(date, self.video_rss_feed)
+        return self.source.get_video_url_from_rss_entry(entry)
     
     def last_meeting_date(self) -> datetime.date:
         """Get the last meeting date for the current feed."""
@@ -267,6 +306,9 @@ class SanFranciscoArchiveParser:
         if date in self.meeting_cache:
             return self.meeting_cache[date]
         
+        if date is None:
+            date = self.last_meeting_date()
+        
         response = self._get_raw_transcribed_meeting(date)
         paragraphs = response.results.channels[0].alternatives[0].paragraphs.paragraphs
         paragraphs = [
@@ -281,7 +323,8 @@ class SanFranciscoArchiveParser:
             date=date,
             group=self.source.name,
             transcript=paragraphs,
-            topics=list(unique_topics)
+            topics=list(unique_topics),
+            video_url=self.get_video_url_from_date(date),
         )
         self.meeting_cache[date] = meeting
         return meeting

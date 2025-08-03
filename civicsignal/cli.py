@@ -111,6 +111,41 @@ def embed(group: str, date: datetime.datetime | None, db_path: Path, force: bool
         click.echo(f"Error embedding meeting: {str(e)}", err=True)
         raise e
 
+@cli.command()
+@click.option(
+    '--db-path',
+    type=click.Path(path_type=Path),
+    default=Path("sf_meetings_rag_db"),
+    help='Path to the ChromaDB database (default: sf_meetings_rag_db)'
+)
+def backfill(db_path: Path):
+    """
+    Backfill the RAG database with all meetings.
+    
+    This command re-embeds all the meetings from the cache into the vector DB.
+    
+    Examples:
+        civicsignal backfill
+    """
+    try:
+        rag_db = MeetingRAGDb(db_path=db_path)
+        # find all the meetings in the cache
+        sources = SanFranciscoArchiveParser.all_cached_sources()
+        num_backfilled = 0
+        click.echo(f"Backfilling {len(sources)} sources")
+        for source in sources:
+            parser = SanFranciscoArchiveParser(source=source)
+            for meeting in parser.all_cached_meetings():
+                rag_db.embed_meeting(meeting)
+            num_backfilled += len(parser.all_cached_meetings())
+
+
+        click.echo(f"✅ Successfully backfilled {num_backfilled} meetings")
+        click.echo(f"Database location: {db_path.absolute()}")
+    except Exception as e:
+        click.echo(f"Error backfilling database: {str(e)}", err=True)
+        raise e
+
 
 @cli.command()
 @click.option(

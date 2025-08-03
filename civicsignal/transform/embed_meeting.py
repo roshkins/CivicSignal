@@ -14,6 +14,7 @@ from civicsignal.utils import Meeting
 
 class MeetingRAGDb:
     def __init__(self, db_path: Path = Path("sf_meetings_rag_db"), embedding_function = DefaultEmbeddingFunction):
+        # TODO: support remote vector db
         self.db = chromadb.PersistentClient(path=db_path)
         self.collection = self.db.get_or_create_collection(name="sf_meetings", embedding_function=embedding_function())
 
@@ -31,6 +32,7 @@ class MeetingRAGDb:
                 "speaker_id": paragraph.speaker_id,
                 "meeting_date": meeting.date.isoformat(),
                 "meeting_group": meeting.group,
+                "video_url": meeting.video_url,
             }
             metadatas.append(metadata)
 

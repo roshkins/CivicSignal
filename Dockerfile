@@ -10,7 +10,7 @@ ENV UV_SYSTEM_PYTHON=1
 WORKDIR /app
 
 # Copy project files
-COPY pyproject.toml uv.lock README.md .
+COPY pyproject.toml uv.lock README.md LICENSE ./
 
 # Install the requirements using uv
 RUN --mount=type=cache,target=/root/.cache/uv \

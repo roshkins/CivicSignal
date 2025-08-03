@@ -3,10 +3,11 @@
 # [tool.marimo.display]
 # theme = "dark"
 # ///
+
 import marimo
 
 __generated_with = "0.14.16"
-app = marimo.App(width="medium")
+app = marimo.App(width="medium", layout_file="layouts/app.grid.json")
 
 
 @app.cell(hide_code=True)
@@ -18,17 +19,17 @@ def imports():
         SanFranciscoArchiveSource,
     )
     from civicsignal.chat import (
-        marimo_chat, 
+        CivicSignalChat, 
         ChatMessage,
     )
     from civicsignal.transform.embed_meeting import MeetingRAGDb
 
     ragdb = MeetingRAGDb()
     return (
+        CivicSignalChat,
         SanFranciscoArchiveParser,
         SanFranciscoArchiveSource,
         datetime,
-        marimo_chat,
         mo,
         ragdb,
     )
@@ -39,7 +40,7 @@ def header(mo):
     mo.md(
         """
     # **CivicSignal**
-    Welcome to CivicSignal! You're helpful interface to the world of San Francisco politics!
+    Welcome to CivicSignal! Your helpful interface to the world of San Francisco politics!
     """
     )
     return
@@ -90,26 +91,63 @@ def embed_button(mo):
 
 
 @app.cell(hide_code=True)
-def embed_compute(date_dropdown, datetime, embed_button, parser, ragdb):
+def embed_compute(date_dropdown, datetime, embed_button, mo, parser, ragdb):
     def embed_meeting(date_str: str):
         date = datetime.date.fromisoformat(date_str)
-        meeting = parser.get_meeting_transcript(date)
-        ragdb.embed_meeting(meeting=meeting)
+        with mo.status.spinner(title="Embedding meeting...") as _spinner:
+            _spinner.update(subtitle="Getting meeting transcript...")
+            meeting = parser.get_meeting_transcript(date)
+            _spinner.update(subtitle="Embedding transcript into DB...")
+            ragdb.embed_meeting(meeting=meeting)
 
+    db_size = ragdb.collection.count()
+    display = mo.md(f"Current size of database: {db_size} paragraphs")
+
+    embeding_failed = False
     if embed_button.value:
-        embed_meeting(date_str=date_dropdown.value)
+        embeding_failed = False
+        try:
+            embed_meeting(date_str=date_dropdown.value)
+        except Exception as e:
+            embeding_failed = True
+            display = mo.md(f"Failed to embed meeting: {e}")
+
+    display
     return
 
 
 @app.cell(hide_code=True)
-def civicsignal_chat(marimo_chat, mo):
+def civicsignal_chat(CivicSignalChat, mo):
+    # TODO: Add a input field for API key
+    model = CivicSignalChat()
     mo.ui.chat(
-        marimo_chat(),
+        model,
         prompts=[
             "Tell me about planning meetings",
             "What's going on with the valencia bike lane?",
         ]
     )
+    return (model,)
+
+
+@app.cell
+def _(mo, model):
+    video_height = 720
+    video_width = video_height / 1.5
+    video_source = model.reference_video_url
+
+    if video_source:
+        video_display = mo.video(src=video_source, height=video_height, width=video_width, rounded=True)
+    else:
+        # just empty space
+        video_display = mo.md("")
+
+    video_display
+    return
+
+
+@app.cell
+def _():
     return
 
 

@@ -4,6 +4,7 @@ import re
 import logging
 import os
 from dataclasses import dataclass
+from typing import Optional
 
 import feedparser
 
@@ -24,6 +25,21 @@ class Paragraph:
     def text(self) -> str:
         return ' '.join(self.sentences)
 
+    @classmethod
+    def _time_to_str(cls, time: float) -> str:
+        hours = int(time // 3600)
+        minutes = int((time % 3600) // 60)
+        seconds = time % 60
+        return f"{hours:02d}:{minutes:02d}:{seconds:02.0f}"
+    
+    @property
+    def start_time_str(self) -> str:
+        return self._time_to_str(self.start_time)
+    
+    @property
+    def end_time_str(self) -> str:
+        return self._time_to_str(self.end_time)
+
 @dataclass
 class Meeting:
     date: datetime.date
@@ -31,6 +47,7 @@ class Meeting:
     group: str
     transcript: list[Paragraph]
     topics: list[str]
+    video_url: Optional[str] = None
 
 def get_date_from_feed_entry(entry: feedparser.FeedParserDict) -> datetime.date:
     """Get the date from a feed entry."""
