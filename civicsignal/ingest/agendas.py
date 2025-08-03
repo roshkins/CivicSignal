@@ -34,7 +34,7 @@ class SanFranciscoAgendaParser:
         if self.source.format == "rss":
             self.feed = feedparser.parse(self.source.url)
         elif self.source.format == "html":
-            # TODO: parse html
+            # TODO: parse html, maybe use LLMs to parse them
             # All the commissions have different html structures, so we need to parse them differently
             # perhaps get LLMs + beautifulsoup to parse them
             raise NotImplementedError("HTML parsing not implemented yet")

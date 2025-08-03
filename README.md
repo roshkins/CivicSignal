@@ -191,10 +191,15 @@ If you encounter any issues or have questions, please:
 
 - [ ] Enhanced archive browsing capabilities
 - [ ] Add support for parsing through agendas
+- [ ] Embed sentence by sentence data to the vector database
+- [ ] Add support for updating agendas with timestamps/links to the meeting
 - [ ] Add support for parsing live meetings
+- [ ] Add support for parsing/linking with civlab.org
 - [ ] Advanced RAG implementations
+- [ ] Make transcript cache to a remote vector database
 - [ ] API endpoints for web integration
 - [ ] Support for remote vector databases
 - [ ] Support for local LLMs
 - [ ] Asynchronous processing of meetings
 - [ ] Documentation improvements
+- [ ] Make into MCP server

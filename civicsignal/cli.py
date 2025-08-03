@@ -9,6 +9,7 @@ across San Francisco government meetings.
 import time
 import click
 import datetime
+import random
 from pathlib import Path
 from typing import Optional
 
@@ -144,7 +145,13 @@ def embed(group: str, date: datetime.datetime | None, db_path: Path, force: bool
     is_flag=True,
     help='Backfill only cached meetings'
 )
-def backfill(db_path: Path, all_sources: bool, all_dates: bool, cached_only: bool, group: Optional[str]):
+@click.option(
+    '--shortest-first',
+    '-s',
+    is_flag=True,
+    help='Backfill the shortest meetings first'
+)
+def backfill(db_path: Path, all_sources: bool, all_dates: bool, cached_only: bool, group: Optional[str], shortest_first: bool):
     """
     Backfill the RAG database with all meetings.
     
@@ -170,6 +177,9 @@ def backfill(db_path: Path, all_sources: bool, all_dates: bool, cached_only: boo
             # default to backfilling all cached meetings
             sources = SanFranciscoArchiveParser.all_cached_sources()
 
+        # shuffle the sources to not always go in the same order
+        random.shuffle(sources)
+
         click.echo(f"Backfilling {len(sources)} sources")
         if cached_only:
             click.echo("Backfilling only cached meetings")
@@ -184,22 +194,36 @@ def backfill(db_path: Path, all_sources: bool, all_dates: bool, cached_only: boo
                 dates = parser.all_meeting_dates()
             else:
                 dates = [m.date for m in parser.all_cached_meetings()]
-                if len(dates) == 0:
+                if len(dates) == 0 and shortest_first:
+                    # if nothing is cached, get the shortest meeting
+                    maybe_dates = parser.all_meeting_dates()
+                    maybe_dates.sort(key=lambda x: parser.get_audio_size_from_date(x))
+                    dates = maybe_dates[:1]
+                elif len(dates) == 0:
                     # if nothing is cached, get the latest meeting
                     dates = [parser.last_meeting_date()]
             for date in dates:
                 to_backfill.append((source, date))
 
         click.echo(f"Backfilling {len(to_backfill)} meetings")
+
+        if shortest_first:
+            to_backfill.sort(key=lambda x: parsers[x[0]].get_audio_size_from_date(x[1]))
         
         for source, date in to_backfill:
             parser = parsers[source]
             if date not in parser.meeting_cache:
                 # add a delay to avoid rate limiting
                 time.sleep(15)
-            meeting = parser.get_meeting_transcript(date=date)
-            rag_db.embed_meeting(meeting)
-            num_backfilled += 1
+            try:
+                click.echo(f"\tBackfilling {source.name} on {date}")
+                meeting = parser.get_meeting_transcript(date=date)
+                rag_db.embed_meeting(meeting)
+                click.echo(f"\t✅ Backfilled {source.name} on {date}")
+                num_backfilled += 1
+            except Exception as e:
+                click.echo(f"\t❌ Error backfilling {source.name} on {date}: {str(e)}", err=True)
+                continue
 
         click.echo(f"✅ Successfully backfilled {num_backfilled} meetings")
         click.echo(f"Database location: {db_path.absolute()}")

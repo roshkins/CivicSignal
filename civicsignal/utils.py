@@ -49,6 +49,7 @@ class Meeting:
     transcript: list[Paragraph]
     topics: list[str]
     video_url: Optional[str] = None
+    embed_url: Optional[str] = None
 
 def get_date_from_feed_entry(entry: feedparser.FeedParserDict) -> datetime.date:
     """Get the date from a feed entry."""

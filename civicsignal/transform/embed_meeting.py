@@ -34,6 +34,7 @@ class MeetingRAGDb:
                 "meeting_group": meeting.group,
                 "meeting_group_id": meeting.group_id,
                 "video_url": meeting.video_url,
+                "embed_url": meeting.embed_url,
             }
             metadatas.append(metadata)
 

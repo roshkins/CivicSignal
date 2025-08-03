@@ -7,6 +7,7 @@ from enum import Enum
 from pathlib import Path
 import random
 import time
+import re
 
 import feedparser
 import requests
@@ -16,6 +17,8 @@ from deepgram import DeepgramClient, PrerecordedOptions, PrerecordedResponse
 from civicsignal.utils import get_date_from_feed_entry, Meeting, Paragraph
 
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
+
+CLIP_ID_REGEX = re.compile(r"https://sanfrancisco.granicus.com/DownloadFile.php\?view_id=(?P<view_id>[0-9]+)&clip_id=(?P<clip_id>[0-9]+)")
 
 class SanFranciscoArchiveSource(Enum):
     ADDITIONAL_PROGRAMS = "74"
@@ -131,7 +134,9 @@ class SanFranciscoArchiveSource(Enum):
 
     
     def video_url_from_clip_id(self, clip_id: str, start_time: int | float | None = None, end_time: int | float | None = None) -> str:
-        """Get the video URL for a given clip ID."""
+        """Get the video URL for a given clip ID.
+        This is the embeddable player link.
+        """
         timestamps = []
         if start_time is not None:
             timestamps += [f"entrytime={int(start_time)}"]
@@ -144,6 +149,15 @@ class SanFranciscoArchiveSource(Enum):
             timestamps = ""
         return f"https://sanfrancisco.granicus.com/player/clip/{clip_id}?view_id={self.value}&redirect=true&embed=1{timestamps}"
 
+    
+    def get_clip_id_from_video_url(self, video_url: str) -> str:
+        """Get the clip ID from a video URL."""
+        match = CLIP_ID_REGEX.search(video_url)
+        if match:
+            return match.group("clip_id")
+        logging.warning(f"Could not find clip ID in video URL: {video_url}")
+        return ""
+
 
     @classmethod
     def get_audio_url_from_rss_entry(cls, entry: FeedParserDict):
@@ -152,7 +166,9 @@ class SanFranciscoArchiveSource(Enum):
     
     @classmethod
     def get_video_url_from_rss_entry(cls, entry: FeedParserDict):
-        """Get the video URL for a given RSS entry."""
+        """Get the video URL for a given RSS entry.
+        This is the download link.
+        """
         return [link for link in entry.links if "video/" in link["type"] ][0]["href"]
 
     @classmethod
@@ -248,6 +264,12 @@ class SanFranciscoArchiveParser:
         """Get the audio URL for a given clip ID."""
         entry = self._get_rss_entry_from_date(date, self.audio_rss_feed)
         return self.source.get_audio_url_from_rss_entry(entry)
+
+    def get_audio_size_from_date(self, date: datetime.date) -> int:
+        """Get the audio size for a given date."""
+        url = self.get_audio_url_from_date(date)
+        head = requests.head(url, allow_redirects=True)
+        return int(head.headers.get("Content-Length", 0))
     
     def get_video_url_from_date(self, date: datetime.date) -> str:
         """Get the video URL for a given clip ID."""
@@ -262,7 +284,7 @@ class SanFranciscoArchiveParser:
         """Get all meeting dates for the current feed."""
         return [get_date_from_feed_entry(entry) for entry in self.audio_rss_feed.entries]
 
-    def download_audio(self, date: datetime.date) -> bytes:
+    def download_audio(self, date: datetime.date) -> requests.Response:
         """Download the audio for a given date."""
         audio_url = self.get_audio_url_from_date(date)
         response = requests.get(audio_url)
@@ -308,10 +330,10 @@ class SanFranciscoArchiveParser:
                 except Exception as e:
                     attempt += 1
                     if attempt == max_retries:
-                        raise Exception(f"Failed to transcribe after {max_retries} attempts: {str(e)}")
+                        raise Exception(f"Failed to transcribe {self.source.name} on {date} after {max_retries} attempts: {str(e)}")
                     
                     wait_time = (retry_delay * attempt) + random.uniform(0, 1)
-                    logging.warning(f"Transcription attempt {attempt} failed, retrying in {wait_time} seconds...")
+                    logging.warning(f"Transcription attempt {attempt} for {self.source.name} on {date} failed, retrying in {wait_time} seconds...")
                     time.sleep(wait_time)
 
             self.transcript_response_cache[date] = response
@@ -356,13 +378,17 @@ class SanFranciscoArchiveParser:
                 sentences=[sentence.text for sentence in paragraph.sentences]
             ) for paragraph in paragraphs]
         unique_topics = { topic.topic for segment in response.results.topics.segments for topic in segment.topics }
+        video_url = self.get_video_url_from_date(date)
+        clip_id = self.source.get_clip_id_from_video_url(video_url)
+        embed_url = self.source.video_url_from_clip_id(clip_id)
         meeting = Meeting(
             date=date,
             group=self.source.name,
             group_id=int(self.source.value),
             transcript=paragraphs,
             topics=list(unique_topics),
-            video_url=self.get_video_url_from_date(date),
+            video_url=video_url,
+            embed_url=embed_url,
         )
         self.meeting_cache[date] = meeting
         return meeting

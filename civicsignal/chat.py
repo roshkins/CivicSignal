@@ -45,6 +45,7 @@ class CivicSignalChat:
             )
         
         self.client = CerebrasCloudClient(api_key=self.api_key)
+        # TODO: try "qwen-3-235b-a22b-instruct-2507"
         self.create_completion = partial(self.client.chat.completions.create, model="qwen-3-32b")
         self.conversation_history: List[ChatMessage] = []
 
@@ -53,7 +54,7 @@ class CivicSignalChat:
         self._reference_video_start_timestamp = None
         self._reference_video_end_timestamp = None
         
-    def _format_similar_topics(self, results: Dict[str, Any]) -> str:
+    def _format_similar_topics(self, results: Dict[str, Any], max_text_length: int = 500) -> str:
         """Format similar topics results for display."""
         if not results or not results.get('documents'):
             return "No similar topics found."
@@ -73,7 +74,9 @@ class CivicSignalChat:
                 f"{i}. **Similarity: {similarity_score:.2%}**\n"
                 f"   **Time:** {start_time_str} - {end_time_str} ({start_time} - {end_time} seconds)\n"
                 f"   **Speaker:** {metadata.get('speaker_id', 'Unknown')}\n"
-                f"   **Content:** {doc[:200]}{'...' if len(doc) > 200 else ''}\n"
+                f"   **Content:** {doc[:max_text_length]}{'...' if len(doc) > max_text_length else ''}\n"
+                f"   **Date:** {metadata.get('meeting_date', 'N/A')}\n"
+                f"   **Meeting Group:** {metadata.get('meeting_group', 'N/A')} (id={metadata.get('meeting_group_id', 'N/A')})\n"
                 f"   **Video URL:** {metadata.get('video_url', 'N/A')}\n"
             )
         
@@ -90,11 +93,13 @@ Your capabilities:
 1. Answer questions about civic meetings, government processes, and local issues
 2. Search for similar topics from archived meeting transcripts
 3. Provide context and insights about government discussions
+4. Provide video references when discussing meeting content
 
-Get the correct video URL and embed it in a <video></video> element, append #t=start to the video url with the start and end timecodes in number of decimal seconds since the beginning of the video.
+Get the correct video URL and embed it in a <video></video> element, append #t={{start}} to the video url with the start and end timecodes in number of decimal seconds since the beginning of the video.
 then starts playing at the beginning of the clip. Autoplay should be enabled.
 
 Always provide specific timecodes (formatted in HH:MM:SS, like 1:05:23, 5:23, or 23 seconds if less than 60 seconds, never 1024.52 seconds ) and video references when discussing meeting content. Link directly if possible.
+Always show the video when you mention a specific timecode. Only autoplay if one video is displayed.
 
 When a user asks about a specific topic, you can search for similar discussions in the meeting archives. Always be helpful, accurate, and provide relevant context from the civic domain.
 
