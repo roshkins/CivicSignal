@@ -6,6 +6,7 @@ This CLI provides commands for embedding archived meetings and searching for top
 across San Francisco government meetings.
 """
 
+import time
 import click
 import datetime
 from pathlib import Path
@@ -118,7 +119,32 @@ def embed(group: str, date: datetime.datetime | None, db_path: Path, force: bool
     default=Path("sf_meetings_rag_db"),
     help='Path to the ChromaDB database (default: sf_meetings_rag_db)'
 )
-def backfill(db_path: Path):
+@click.option(
+    '--group', 
+    '-g',
+    type=click.Choice([source.name for source in SanFranciscoArchiveSource], case_sensitive=False),
+    required=False,
+    help='The government group/commission to backfill meetings for'
+)
+@click.option(
+    '--all-sources',
+    '-a',
+    is_flag=True,
+    help='Backfill all sources'
+)
+@click.option(
+    '--all-dates',
+    '-d',
+    is_flag=True,
+    help='Backfill all dates'
+)
+@click.option(
+    '--cached-only',
+    '-c',
+    is_flag=True,
+    help='Backfill only cached meetings'
+)
+def backfill(db_path: Path, all_sources: bool, all_dates: bool, cached_only: bool, group: Optional[str]):
     """
     Backfill the RAG database with all meetings.
     
@@ -129,16 +155,51 @@ def backfill(db_path: Path):
     """
     try:
         rag_db = MeetingRAGDb(db_path=db_path)
-        # find all the meetings in the cache
-        sources = SanFranciscoArchiveParser.all_cached_sources()
-        num_backfilled = 0
-        click.echo(f"Backfilling {len(sources)} sources")
-        for source in sources:
-            parser = SanFranciscoArchiveParser(source=source)
-            for meeting in parser.all_cached_meetings():
-                rag_db.embed_meeting(meeting)
-            num_backfilled += len(parser.all_cached_meetings())
+        parsers = {source: SanFranciscoArchiveParser(source=source) for source in list(SanFranciscoArchiveSource)}
 
+        to_backfill: list[tuple[SanFranciscoArchiveSource, datetime.date]] = []
+
+        num_backfilled = 0
+        if cached_only:
+            sources = SanFranciscoArchiveParser.all_cached_sources()
+        elif group:
+            sources = [SanFranciscoArchiveSource.from_string(group)]
+        elif all_sources:
+            sources = list(SanFranciscoArchiveSource)
+        else:
+            # default to backfilling all cached meetings
+            sources = SanFranciscoArchiveParser.all_cached_sources()
+
+        click.echo(f"Backfilling {len(sources)} sources")
+        if cached_only:
+            click.echo("Backfilling only cached meetings")
+        elif all_dates:
+            click.echo("Backfilling all dates")
+
+        for source in sources:
+            parser = parsers[source]
+            if cached_only:
+                dates = [m.date for m in parser.all_cached_meetings()]
+            elif all_dates:
+                dates = parser.all_meeting_dates()
+            else:
+                dates = [m.date for m in parser.all_cached_meetings()]
+                if len(dates) == 0:
+                    # if nothing is cached, get the latest meeting
+                    dates = [parser.last_meeting_date()]
+            for date in dates:
+                to_backfill.append((source, date))
+
+        click.echo(f"Backfilling {len(to_backfill)} meetings")
+        
+        for source, date in to_backfill:
+            parser = parsers[source]
+            if date not in parser.meeting_cache:
+                # add a delay to avoid rate limiting
+                time.sleep(15)
+            meeting = parser.get_meeting_transcript(date=date)
+            rag_db.embed_meeting(meeting)
+            num_backfilled += 1
 
         click.echo(f"✅ Successfully backfilled {num_backfilled} meetings")
         click.echo(f"Database location: {db_path.absolute()}")

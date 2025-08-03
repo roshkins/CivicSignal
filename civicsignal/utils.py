@@ -45,6 +45,7 @@ class Meeting:
     date: datetime.date
     # Board of Supervisors, Planning Commission, etc.
     group: str
+    group_id: int
     transcript: list[Paragraph]
     topics: list[str]
     video_url: Optional[str] = None

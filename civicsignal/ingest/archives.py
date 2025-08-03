@@ -6,6 +6,7 @@ import logging
 from enum import Enum
 from pathlib import Path
 import random
+import time
 
 import feedparser
 import requests
@@ -128,6 +129,21 @@ class SanFranciscoArchiveSource(Enum):
         """Get the SF VOD RSS URL for a given view ID."""
         return f"https://sanfrancisco.granicus.com/Podcast.php?view_id={self.value}"
 
+    
+    def video_url_from_clip_id(self, clip_id: str, start_time: int | float | None = None, end_time: int | float | None = None) -> str:
+        """Get the video URL for a given clip ID."""
+        timestamps = []
+        if start_time is not None:
+            timestamps += [f"entrytime={int(start_time)}"]
+        if end_time is not None:
+            timestamps += [f"stoptime={int(end_time)}"]
+        
+        if len(timestamps) > 0:
+            timestamps = "&" + "&".join(timestamps)
+        else:
+            timestamps = ""
+        return f"https://sanfrancisco.granicus.com/player/clip/{clip_id}?view_id={self.value}&redirect=true&embed=1{timestamps}"
+
 
     @classmethod
     def get_audio_url_from_rss_entry(cls, entry: FeedParserDict):
@@ -142,9 +158,17 @@ class SanFranciscoArchiveSource(Enum):
     @classmethod
     def from_string(cls, name):
         """Get enum member from string name (case-insensitive)."""
-        name = name.upper().replace('-', '_')
+        name = name.upper().replace('-', '_').replace(' ', '_')
         try:
             return cls[name]
+        except KeyError:
+            return None
+    
+    @classmethod
+    def from_int(cls, group_id: int):
+        """Get enum member from string name (case-insensitive)."""
+        try:
+            return cls(str(group_id))
         except KeyError:
             return None
 
@@ -154,16 +178,16 @@ class SanFranciscoArchiveParser:
         self.source = source
         self.audio_rss_feed = feedparser.parse(source.audio_rss_url)
         if not self.audio_rss_feed.status == 200:
-            raise Exception(f"Failed to fetch audio RSS feed for {source.name}")
+            logging.error(f"Failed to fetch audio RSS feed for {source.name}")
         self.agenda_rss_feed = feedparser.parse(source.agenda_rss_url)
         if not self.agenda_rss_feed.status == 200:
-            raise Exception(f"Failed to fetch agenda RSS feed for {source.name}")
+            logging.error(f"Failed to fetch agenda RSS feed for {source.name}")
         self.video_rss_feed = feedparser.parse(source.video_rss_url)
         if not self.video_rss_feed.status == 200:
-            raise Exception(f"Failed to fetch video RSS feed for {source.name}")
+            logging.error(f"Failed to fetch video RSS feed for {source.name}")
         
         if DEEPGRAM_API_KEY is None:
-            raise Exception("DEEPGRAM_API_KEY is not set")
+            logging.error("DEEPGRAM_API_KEY is not set")
         self.deepgram = DeepgramClient(DEEPGRAM_API_KEY)
 
         self.transcript_response_cache: dict[datetime.date, PrerecordedResponse] = {}
@@ -267,15 +291,28 @@ class SanFranciscoArchiveParser:
                 paragraphs=True,
                 # utterances=True, # add this if we need smaller chunks
             )
+            max_retries = 3
+            retry_delay = 5  # seconds
+            attempt = 0
 
-            audio_data = self.download_audio(date)
-            # source = {"buffer": audio_data.content}
-            source = {"stream": audio_data.iter_content(chunk_size=8192)}
+            while attempt < max_retries:
+                try:
+                    audio_data = self.download_audio(date)
+                    source = {"stream": audio_data.iter_content(chunk_size=8192)}
 
-            response = self.deepgram.listen.rest.v("1").transcribe_file(
-                source=source,
-                options=options,
-            )
+                    response = self.deepgram.listen.rest.v("1").transcribe_file(
+                        source=source,
+                        options=options,
+                    )
+                    break  # Success - exit loop
+                except Exception as e:
+                    attempt += 1
+                    if attempt == max_retries:
+                        raise Exception(f"Failed to transcribe after {max_retries} attempts: {str(e)}")
+                    
+                    wait_time = (retry_delay * attempt) + random.uniform(0, 1)
+                    logging.warning(f"Transcription attempt {attempt} failed, retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
 
             self.transcript_response_cache[date] = response
             self._save_transcript_to_disk(date, response)
@@ -322,6 +359,7 @@ class SanFranciscoArchiveParser:
         meeting = Meeting(
             date=date,
             group=self.source.name,
+            group_id=int(self.source.value),
             transcript=paragraphs,
             topics=list(unique_topics),
             video_url=self.get_video_url_from_date(date),

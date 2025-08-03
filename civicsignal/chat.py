@@ -18,6 +18,7 @@ import marimo as mo
 from cerebras.cloud.sdk import Client as CerebrasCloudClient
 from cerebras.cloud.sdk.types.chat.chat_completion import ChatCompletionResponseChoiceMessage as CerebrasChatMessage
 
+from civicsignal.ingest.archives import SanFranciscoArchiveSource
 from civicsignal.output.similar_topics import search_for_similar_topics
 from civicsignal.utils import Paragraph
 
@@ -81,7 +82,7 @@ class CivicSignalChat:
     def _build_system_prompt(self) -> str:
         """Build the system prompt for the chat interface."""
         today = datetime.date.today().isoformat()
-        return f"""You are CivicSignal, an AI assistant that helps users understand civic meetings and government proceedings in San Francisco. 
+        return f"""You are CivicSignal, an AI assistant that helps users understand civic meetings and government proceedings in San Francisco.
 
 Today's date is {today}.
 
@@ -90,9 +91,35 @@ Your capabilities:
 2. Search for similar topics from archived meeting transcripts
 3. Provide context and insights about government discussions
 
+Get the correct video URL and embed it in a <video></video> element, append #t=start to the video url with the start and end timecodes in number of decimal seconds since the beginning of the video.
+then starts playing at the beginning of the clip. Autoplay should be enabled.
+
+Always provide specific timecodes (formatted in HH:MM:SS, like 1:05:23, 5:23, or 23 seconds if less than 60 seconds, never 1024.52 seconds ) and video references when discussing meeting content. Link directly if possible.
+
 When a user asks about a specific topic, you can search for similar discussions in the meeting archives. Always be helpful, accurate, and provide relevant context from the civic domain.
 
 Format your responses clearly and use markdown when appropriate."""
+
+#         return f"""You are CivicSignal, an AI assistant that helps users understand civic meetings and government proceedings in San Francisco.
+
+# Today's date is {today}.
+
+# Your capabilities:
+# 1. Answer questions about civic meetings, government processes, and local issues
+# 2. Search for similar topics from archived meeting transcripts
+# 3. Provide context and insights about government discussions
+
+# Get the correct video URL and embed it in a <video></video> element, append the query params entrytime={{start}}&stoptime={{end}} to the video url with the start and end timecodes in number of integer seconds since the beginning of the video.
+# then starts playing at the beginning of the clip. Autoplay should be enabled.
+
+# The video url should look like this:
+# "https://sanfrancisco.granicus.com/player/clip/{{clip_id}}?view_id={{group_id}}&redirect=true&embed=1&entrytime={{start}}&stoptime={{end}}"
+
+# Always provide specific timecodes (formatted in HH:MM:SS, like 1:05:23, 5:23, or 23 seconds if less than 60 seconds, never 1024.52 seconds ) and video references when discussing meeting content. Link directly if possible.
+
+# When a user asks about a specific topic, you can search for similar discussions in the meeting archives. Always be helpful, accurate, and provide relevant context from the civic domain.
+
+# Format your responses clearly and use markdown when appropriate."""
     
 
     def _build_tools(self) -> List[Dict[str, Any]]:
@@ -120,32 +147,36 @@ Format your responses clearly and use markdown when appropriate."""
                     }
                 }
             },
-            {
-                "type": "function",
-                "function": {
-                    "name": "display_video",
-                    "strict": True,
-                    "description": "Display the relevant video for the last message.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "url": {
-                                "type": "string",
-                                "description": "The URL of the video to display"
-                            },
-                            "start_time": {
-                                "type": "number",
-                                "description": "The start time of the video to display"
-                            },
-                            "end_time": {
-                                "type": "number",
-                                "description": "The end time of the video to display"
-                            }
-                        },
-                        "required": ["url"]
-                    }
-                }
-            }
+            # {
+            #     "type": "function",
+            #     "function": {
+            #         "name": "display_video",
+            #         "strict": True,
+            #         "description": "Display the relevant video for the last message.",
+            #         "parameters": {
+            #             "type": "object",
+            #             "properties": {
+            #                 "clip_id": {
+            #                     "type": "string",
+            #                     "description": "The clip id of the video to display"
+            #                 },
+            #                 "group_name": {
+            #                     "type": "string",
+            #                     "description": "The group name of the video to display (e.g. 'Board of Supervisors', 'Planning Commission', etc.)"
+            #                 },
+            #                 "start_time": {
+            #                     "type": "number",
+            #                     "description": "The start time of the video to display"
+            #                 },
+            #                 "end_time": {
+            #                     "type": "number",
+            #                     "description": "The end time of the video to display"
+            #                 }
+            #             },
+            #             "required": ["clip_id", "group_name"]
+            #         }
+            #     }
+            # }
         ]
         return tools
 
@@ -155,6 +186,12 @@ Format your responses clearly and use markdown when appropriate."""
         if not self.conversation_history:
             return None
         return self._reference_video_url
+
+    def _display_video_from_clip_id(self, group_name: str, clip_id: str, start_time: Optional[float] = None, end_time: Optional[float] = None):
+        """Display the video for a given clip ID."""
+        source = SanFranciscoArchiveSource.from_string(group_name)
+        url = source.video_url_from_clip_id(clip_id, start_time, end_time)
+        return self._display_video(url, start_time, end_time)
 
     def _display_video(self, url: str, start_time: Optional[float] = None, end_time: Optional[float] = None):
         """Display the video for the last message."""
@@ -169,7 +206,8 @@ Format your responses clearly and use markdown when appropriate."""
         self._reference_video_url = url
         self._reference_video_start_timestamp = start_time
         self._reference_video_end_timestamp = end_time
-        return f"Displaying video for {url}"
+        # print(f"Displaying video at {url} from {start_time} to {end_time}")
+        return f"Check out the video at {url}"
     
     def _get_cerebras_response(self, messages: List[ChatMessage]) -> ChatMessage:
         """Get response from Cerebras model."""
@@ -178,17 +216,26 @@ Format your responses clearly and use markdown when appropriate."""
             response = self.create_completion(
                 messages=messages,
                 max_tokens=5000,
-                temperature=0.7,
+                temperature=0.6,
                 stream=False,
                 tools=self._build_tools(),
                 parallel_tool_calls=False,
             )
 
-            # if response.tool_calls:
-            #     for tool_call in response.tool_calls:
-            #         self._handle_tool_call(tool_call, messages)
+            assistant_response = response.choices[0].message
+
+            assistant_message = ChatMessage(role="assistant", content=assistant_response.content)
+
+            self.conversation_history.append(assistant_message)
+
+            if assistant_response.tool_calls:
+                for tool_call in assistant_response.tool_calls:
+                    self._handle_tool_call(tool_call, messages + [assistant_message])
+
+            if self.conversation_history[-1].role == "tool":
+                return assistant_message
             
-            return response.choices[0].message
+            return self.conversation_history[-1]
             
         except Exception as e:
             return ChatMessage(role="system", content=f"Error generating response: {str(e)}")
@@ -203,8 +250,7 @@ Format your responses clearly and use markdown when appropriate."""
         new_messages = [tool_message]
         response = self._get_cerebras_response(messages=messages + new_messages)
         # get final response from model
-        if response:
-            new_messages.append(ChatMessage(role="assistant", content=response.content))
+        new_messages.append(response)
         return new_messages
 
     def _handle_tool_call(self, tool_call: Any, messages: List[ChatMessage]) -> str:
@@ -218,10 +264,10 @@ Format your responses clearly and use markdown when appropriate."""
             new_messages = self._add_tool_message(similar_topics_formatted, tool_call.id, messages)
         # elif tool_name == "search_for_video":
         elif tool_name == "display_video":
-            self._display_video(tool_args["url"], tool_args.get("start_time", None), tool_args.get("end_time", None))
-            new_messages = self._add_tool_message(f"Displaying video for {tool_args['url']}", tool_call.id, messages)
+            display_string = self._display_video_from_clip_id(tool_args["group_name"], tool_args["clip_id"], tool_args.get("start_time", None), tool_args.get("end_time", None))
+            new_messages = self._add_tool_message(display_string, tool_call.id, messages)
 
-        self.conversation_history.extend(new_messages)
+        # self.conversation_history.extend(new_messages)
         return messages + new_messages
         
     

@@ -26,6 +26,7 @@ def imports():
 
     ragdb = MeetingRAGDb()
     return (
+        ChatMessage,
         CivicSignalChat,
         SanFranciscoArchiveParser,
         SanFranciscoArchiveSource,
@@ -117,27 +118,41 @@ def embed_compute(date_dropdown, datetime, embed_button, mo, parser, ragdb):
 
 
 @app.cell(hide_code=True)
-def civicsignal_chat(CivicSignalChat, mo):
+def civicsignal_chat(ChatMessage, CivicSignalChat, mo):
     # TODO: Add a input field for API key
     model = CivicSignalChat()
+    video_source = model.reference_video_url
+
+    def get_video_url(messages: list[ChatMessage]):
+        # print(f"updating video url: {model.reference_video_url}")
+        video_source = model.reference_video_url
+        return video_source
+
     mo.ui.chat(
         model,
         prompts=[
             "Tell me about planning meetings",
             "What's going on with the valencia bike lane?",
-        ]
+            "Show me clips from the last fire commission meeting",
+            "What's the biggest dollar amount mentioned?",
+            "When was 400 Divisadero last discussed?",
+            "What's happening with the city's new parking app?"
+        ],
+        on_message=get_video_url
     )
-    return (model,)
+    return (get_video_url,)
 
 
-@app.cell
-def _(mo, model):
+@app.cell(hide_code=True)
+def video_panel(get_video_url, mo):
     video_height = 720
     video_width = video_height / 1.5
-    video_source = model.reference_video_url
 
-    if video_source:
-        video_display = mo.video(src=video_source, height=video_height, width=video_width, rounded=True)
+    video_url = get_video_url([])
+
+    if video_url:
+        # print(f"video source updated {video_source}")
+        video_display = mo.video(src=video_url, height=video_height, width=video_width, rounded=True)
     else:
         # just empty space
         video_display = mo.md("")

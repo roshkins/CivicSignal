@@ -32,6 +32,7 @@ class MeetingRAGDb:
                 "speaker_id": paragraph.speaker_id,
                 "meeting_date": meeting.date.isoformat(),
                 "meeting_group": meeting.group,
+                "meeting_group_id": meeting.group_id,
                 "video_url": meeting.video_url,
             }
             metadatas.append(metadata)

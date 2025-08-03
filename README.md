@@ -37,6 +37,15 @@ civicsignal embed --group BOARD_OF_SUPERVISORS --date 2024-01-15
 # Search for topics across embedded meetings
 civicsignal search --topic "housing development"
 
+# Backfill the database with all meetings
+civicsignal backfill --all-sources --all-dates
+
+# Backfill the database with all cached meetings
+civicsignal backfill --cached-only
+
+# Backfill the database with all meetings for a specific group
+civicsignal backfill --group BOARD_OF_SUPERVISORS
+
 # Get help for any command
 civicsignal --help
 civicsignal embed --help
@@ -69,6 +78,7 @@ topics = parser.get_meeting_topics(dates[0])
 - **RAG Integration**: Ready-to-use RAG (Retrieval-Augmented Generation) components
 - **Output**: Tools for outputting data in various formats
 - **CLI Interface**: Command-line tools for easy data access and analysis
+- **Web App Interface**: Chat interface for asking questions about San Francisco government meetings
 
 ## CLI Commands
 
@@ -180,7 +190,11 @@ If you encounter any issues or have questions, please:
 ## Roadmap
 
 - [ ] Enhanced archive browsing capabilities
-- [ ] More comprehensive data ingestion tools
+- [ ] Add support for parsing through agendas
+- [ ] Add support for parsing live meetings
 - [ ] Advanced RAG implementations
 - [ ] API endpoints for web integration
+- [ ] Support for remote vector databases
+- [ ] Support for local LLMs
+- [ ] Asynchronous processing of meetings
 - [ ] Documentation improvements
