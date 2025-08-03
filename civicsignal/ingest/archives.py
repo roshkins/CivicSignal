@@ -2,11 +2,13 @@
 import datetime
 import os
 from enum import Enum
+import random
 
 import feedparser
 import requests
 from feedparser.util import FeedParserDict
 from deepgram import DeepgramClient, PrerecordedOptions, PrerecordedResponse
+import test
 
 from civicsignal.ingest.utils import get_date_from_feed_entry
 
@@ -160,7 +162,7 @@ class SanFranciscoArchiveParser:
         for entry in self.audio_rss_feed.entries:
             entry_date = get_date_from_feed_entry(entry)
             if entry_date == date:
-                return self.group.get_audio_url_from_rss_entry(entry)
+                return self.source.get_audio_url_from_rss_entry(entry)
         raise Exception(f"No audio URL found for {date}")
     
     def last_meeting_date(self) -> datetime.date:
@@ -230,6 +232,10 @@ def main():
     parser = SanFranciscoArchiveParser(test_source)
     topics = parser.get_meeting_topics(test_date)
     print(topics)
+    
+    transcript = parser._get_meeting_transcript(test_date).results.channels[0].alternatives[0].paragraphs.paragraphs
+    print(transcript)
+
 
 if __name__ == "__main__":
     main()

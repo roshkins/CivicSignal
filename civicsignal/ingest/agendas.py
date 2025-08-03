@@ -63,19 +63,19 @@ class SanFranciscoAgendaParser:
         
         return agenda_entry
     
-    def get_agenda_items(self, date: datetime.date | None = None):
-        """Get the agenda items for the current feed."""
-        agenda_entry = self.get_agenda_entry(date)
-        request_url = agenda_entry.link
-        response = requests.get(request_url)
-        soup = BeautifulSoup(response.text, "html.parser")
-        # check if the page is an agenda itself, or contains link to an agenda
-        agenda_items = []
-        for div in soup.find_all("div"):
-        for link in soup.find_all("a"):
-            if "agenda" in link.text.lower():
-                agenda_items.append(link.text)
-        return None
+    # def get_agenda_items(self, date: datetime.date | None = None):
+    #     """Get the agenda items for the current feed."""
+    #     agenda_entry = self.get_agenda_entry(date)
+    #     request_url = agenda_entry.link
+    #     response = requests.get(request_url)
+    #     soup = BeautifulSoup(response.text, "html.parser")
+    #     # check if the page is an agenda itself, or contains link to an agenda
+    #     agenda_items = []
+    #     for div in soup.find_all("div"):
+    #     for link in soup.find_all("a"):
+    #         if "agenda" in link.text.lower():
+    #             agenda_items.append(link.text)
+    #     return None
 
     
     # def get_agenda_iltem_topics(self, date: datetime.date | None = None):
@@ -85,8 +85,8 @@ def main():
     """Example usage."""
     test_source = SanFranciscoAgendaSource.BOARD_OF_SUPERVISORS
     parser = SanFranciscoAgendaParser(test_source)
-    agenda_items = parser.get_agenda_items()
-    print(agenda_items)
+    # agenda_items = parser.get_agenda_items()
+    # print(agenda_items)
 
 
 if __name__ == "__main__":
