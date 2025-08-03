@@ -70,6 +70,17 @@ transcript = parser.get_meeting_transcript(dates[0])
 topics = parser.get_meeting_topics(dates[0])
 ```
 
+### Using the Web App
+
+```bash
+# if cloned from github
+marimo run civicsignal/app.py
+# using docker
+docker run -p 8080:8080 roshkins/civicsignal
+```
+
+
+
 ## Features
 
 - **Archive Browsing**: Access San Francisco government archives
@@ -191,6 +202,7 @@ If you encounter any issues or have questions, please:
 
 - [ ] Enhanced archive browsing capabilities
 - [ ] Add support for parsing through agendas
+- [ ] Add support for parsing legistar laws/codes
 - [ ] Embed sentence by sentence data to the vector database
 - [ ] Add support for updating agendas with timestamps/links to the meeting
 - [ ] Add support for parsing live meetings

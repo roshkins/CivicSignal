@@ -18,6 +18,7 @@ class SanFranciscoAgendaSource(Enum):
     ETHICS_COMMISSION = ("https://sfethics.org/ethics/category/agendas/feed", "rss")
     MUNICIPAL_TRANSPORTATION_AGENCY_SFMTA = ("https://www.sfmta.com/meetings-events", "html")
     # TODO: add more sources, see archives.py for more
+    # TODO: look through https://sfgovtv.org/meeting-agendas for more sources
 
     @property
     def url(self):

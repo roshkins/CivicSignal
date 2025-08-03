@@ -192,15 +192,25 @@ class SanFranciscoArchiveParser:
     DEFAULT_CACHE_DIR = Path("cache")
     def __init__(self, source: SanFranciscoArchiveSource = SanFranciscoArchiveSource.BOARD_OF_SUPERVISORS, cache_dir: Path = Path("cache")):
         self.source = source
-        self.audio_rss_feed = feedparser.parse(source.audio_rss_url)
-        if not self.audio_rss_feed.status == 200:
-            logging.error(f"Failed to fetch audio RSS feed for {source.name}")
-        self.agenda_rss_feed = feedparser.parse(source.agenda_rss_url)
-        if not self.agenda_rss_feed.status == 200:
-            logging.error(f"Failed to fetch agenda RSS feed for {source.name}")
-        self.video_rss_feed = feedparser.parse(source.video_rss_url)
-        if not self.video_rss_feed.status == 200:
-            logging.error(f"Failed to fetch video RSS feed for {source.name}")
+        try:
+            self.audio_rss_feed = feedparser.parse(source.audio_rss_url)
+            if not self.audio_rss_feed.status == 200:
+                logging.error(f"Failed to fetch audio RSS feed for {source.name}")
+        except Exception as e:
+            self.audio_rss_feed = None
+        try:
+            self.agenda_rss_feed = feedparser.parse(source.agenda_rss_url)
+            if not self.agenda_rss_feed.status == 200:
+                logging.error(f"Failed to fetch agenda RSS feed for {source.name}")
+        except Exception as e:
+            self.agenda_rss_feed = None
+        try:
+            self.video_rss_feed = feedparser.parse(source.video_rss_url)
+            if not self.video_rss_feed.status == 200:
+                logging.error(f"Failed to fetch video RSS feed for {source.name}")
+        except Exception as e:
+            logging.error(f"Failed to fetch video RSS feed for {source.name}: {e}")
+            self.video_rss_feed = None
         
         if DEEPGRAM_API_KEY is None:
             logging.error("DEEPGRAM_API_KEY is not set")
@@ -262,6 +272,8 @@ class SanFranciscoArchiveParser:
 
     def get_audio_url_from_date(self, date: datetime.date) -> str:
         """Get the audio URL for a given clip ID."""
+        if self.audio_rss_feed is None:
+            raise Exception(f"No audio RSS feed for {self.source.name}")
         entry = self._get_rss_entry_from_date(date, self.audio_rss_feed)
         return self.source.get_audio_url_from_rss_entry(entry)
 
@@ -273,15 +285,21 @@ class SanFranciscoArchiveParser:
     
     def get_video_url_from_date(self, date: datetime.date) -> str:
         """Get the video URL for a given clip ID."""
+        if self.video_rss_feed is None:
+            raise Exception(f"No video RSS feed for {self.source.name}")
         entry = self._get_rss_entry_from_date(date, self.video_rss_feed)
         return self.source.get_video_url_from_rss_entry(entry)
     
     def last_meeting_date(self) -> datetime.date:
         """Get the last meeting date for the current feed."""
+        if self.audio_rss_feed is None:
+            raise Exception(f"No audio RSS feed for {self.source.name}")
         return get_date_from_feed_entry(self.audio_rss_feed.entries[0])
 
     def all_meeting_dates(self) -> list[datetime.date]:
         """Get all meeting dates for the current feed."""
+        if self.audio_rss_feed is None:
+            raise Exception(f"No audio RSS feed for {self.source.name}")
         return [get_date_from_feed_entry(entry) for entry in self.audio_rss_feed.entries]
 
     def download_audio(self, date: datetime.date) -> requests.Response:

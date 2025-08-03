@@ -131,12 +131,14 @@ def civicsignal_chat(ChatMessage, CivicSignalChat, mo):
     mo.ui.chat(
         model,
         prompts=[
-            "Tell me about planning meetings",
+            "Tell me about the latest planning meetings",
             "What's going on with the valencia bike lane?",
             "Show me clips from the last fire commission meeting",
             "What's the biggest dollar amount mentioned?",
-            "When was 400 Divisadero last discussed?",
-            "What's happening with the city's new parking app?"
+            # "When was 400 Divisadero last discussed?",
+            "What's happening with the city's new parking app?",
+            "Who's arguing about the Upper Great Highway?",
+            "Which empty lots are being discussed?",
         ],
         on_message=get_video_url
     )

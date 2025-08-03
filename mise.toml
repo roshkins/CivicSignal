@@ -10,15 +10,3 @@ uv_create_args = ["--seed"]
 description = "Run the CivicSignal UI"
 dir = "{{ config_root }}"
 run = "marimo run civicsignal/app.py"
-
-[tasks.funnel-ts]
-description = "Serve the UI over tailnet"
-env = { PORT = "8080" }
-dir = "{{ config_root }}"
-run = "tailscale funnel --bg $PORT && marimo run civicsignal/app.py --port $PORT; tailscale funnel reset"
-
-[tasks.serve-ts]
-description = "Serve the UI over the internet via tailscale"
-env = { PORT = "8080" }
-dir = "{{ config_root }}"
-run = "tailscale serve --bg $PORT && marimo run civicsignal/app.py --port $PORTl tailscale serve reset"

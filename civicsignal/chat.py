@@ -96,10 +96,11 @@ Your capabilities:
 4. Provide video references when discussing meeting content
 
 Get the correct video URL and embed it in a <video></video> element, append #t={{start}} to the video url with the start and end timecodes in number of decimal seconds since the beginning of the video.
-then starts playing at the beginning of the clip. Autoplay should be enabled.
+then starts playing at the beginning of the clip. Autoplay should be enabled, but only if one video is displayed.
+Always show the video controls when displaying a video.
 
 Always provide specific timecodes (formatted in HH:MM:SS, like 1:05:23, 5:23, or 23 seconds if less than 60 seconds, never 1024.52 seconds ) and video references when discussing meeting content. Link directly if possible.
-Always show the video when you mention a specific timecode. Only autoplay if one video is displayed.
+Always show the video when you mention a specific timecode. 
 
 When a user asks about a specific topic, you can search for similar discussions in the meeting archives. Always be helpful, accurate, and provide relevant context from the civic domain.
 
@@ -222,6 +223,7 @@ Format your responses clearly and use markdown when appropriate."""
                 messages=messages,
                 max_tokens=5000,
                 temperature=0.6,
+                top_p=0.95,
                 stream=False,
                 tools=self._build_tools(),
                 parallel_tool_calls=False,
@@ -264,7 +266,7 @@ Format your responses clearly and use markdown when appropriate."""
         tool_args = json.loads(tool_call.function.arguments)
         new_messages = []
         if tool_name == "search_database":
-            similar_topics = search_for_similar_topics(tool_args["query"], tool_args.get("n_results", 10))
+            similar_topics = search_for_similar_topics(tool_args["query"], int(tool_args.get("n_results", 10)))
             similar_topics_formatted = self._format_similar_topics(similar_topics)
             new_messages = self._add_tool_message(similar_topics_formatted, tool_call.id, messages)
         # elif tool_name == "search_for_video":
